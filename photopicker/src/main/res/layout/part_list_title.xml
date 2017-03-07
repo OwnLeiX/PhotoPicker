@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/darkgray"
+    android:gravity="center_vertical">
+
+    <FrameLayout
+        android:id="@+id/part_title_fl_back"
+        android:layout_width="70dp"
+        android:layout_height="48dp"
+        android:paddingLeft="@dimen/padding_large">
+
+        <ImageView
+            android:layout_width="@dimen/icon_small"
+            android:layout_height="@dimen/icon_small"
+            android:layout_gravity="left|center_vertical"
+            android:scaleType="centerInside"
+            android:src="@drawable/public_back" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/part_title_tv_title"
+        android:text="送花排行"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_weight="1"
+        android:ellipsize="marquee"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:gravity="center"
+        android:marqueeRepeatLimit="marquee_forever"
+        android:paddingLeft="@dimen/padding_small"
+        android:paddingRight="@dimen/padding_small"
+        android:singleLine="true"
+        android:textColor="@color/white"
+        android:textSize="@dimen/font_large" />
+
+    <View
+        android:layout_width="70dp"
+        android:layout_height="48dp"/>
+</LinearLayout>

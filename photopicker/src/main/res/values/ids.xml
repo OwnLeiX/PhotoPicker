@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="folderList" type="id"/>
+    <item name="folderDetail" type="id"/>
+    <item name="pickedPhotos" type="id"/>
+</resources>

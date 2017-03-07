@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:padding="@dimen/padding_normal">
+
+    <ImageView
+        android:id="@+id/folderList_item_iv_img"
+        android:layout_width="@dimen/img_huge"
+        android:layout_height="@dimen/img_huge"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:paddingLeft="@dimen/padding_normal"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/folderList_item_tv_folderName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="left|center_vertical"
+            android:textColor="@color/black"
+            android:textSize="@dimen/font_normal"
+            tools:text="系统相册" />
+
+        <TextView
+            android:id="@+id/folderList_item_tv_photosCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="left|center_vertical"
+            android:paddingTop="@dimen/padding_small"
+            android:textColor="@color/deepgray"
+            android:textSize="@dimen/font_small"
+            tools:text="3" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/folderList_item_iv_enter"
+        android:layout_width="@dimen/icon_small"
+        android:layout_height="@dimen/icon_small"
+        android:scaleType="centerInside"
+        android:src="@drawable/public_enter" />
+
+</LinearLayout>
