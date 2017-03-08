@@ -68,6 +68,14 @@ public class PickerManager implements ScanCallback, SizeClipCallback
 
 	public static PickerManager $()
 	{
+		if (mInstance == null)
+		{
+			synchronized (PickerManager.class)
+			{
+				if (mInstance == null)
+					mInstance = new PickerManager(null, new PhotoParams.Builder().create());
+			}
+		}
 		return mInstance;
 	}
 
@@ -135,9 +143,14 @@ public class PickerManager implements ScanCallback, SizeClipCallback
 				return false;
 			} else
 			{
-				mPickerCallback.onCancel();//取消
-				PickerManager.destroy();//销毁自己，避免内存泄漏
-				return true;
+				try
+				{
+					mPickerCallback.onCancel();//取消
+					return true;
+				} finally
+				{
+					PickerManager.destroy();//销毁自己，避免内存泄漏
+				}
 			}
 		} else
 		{

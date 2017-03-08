@@ -18,6 +18,10 @@ public class Pool
 	private static ThreadPoolExecutor THREAD_POOL = (ThreadPoolExecutor) Executors.newFixedThreadPool(POOL_SIZE);// 线程池
 	private static LinkedList<Task> TASK_QUEUE = new LinkedList<>();// 等待队列
 
+	public static ThreadPoolExecutor $(){
+		return THREAD_POOL;
+	}
+
 	/**
 	 * 执行任务
 	 * @param task

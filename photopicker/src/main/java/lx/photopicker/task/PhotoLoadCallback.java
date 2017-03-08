@@ -1,6 +1,8 @@
 package lx.photopicker.task;
 
 import android.graphics.Bitmap;
+import android.graphics.RectF;
+import android.support.annotation.Nullable;
 
 /**
  * <b></b>
@@ -10,5 +12,6 @@ import android.graphics.Bitmap;
  */
 
 public interface PhotoLoadCallback {
-    void onLoadFinished(Bitmap bitmap,boolean isZipped);
+    void onLoadBitmapSize(int width, int height);
+    void onLoadFinished(@Nullable Bitmap bitmap, boolean isZipped, @Nullable RectF loadPercentRectF);
 }

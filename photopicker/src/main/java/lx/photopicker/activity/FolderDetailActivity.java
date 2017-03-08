@@ -251,9 +251,13 @@ public class FolderDetailActivity extends BaseActivity
      * @return true 已经达到上限 | false 还没达到上限
      */
     private boolean isFullCount() {
-        int maxCount = mPhotoParams.getMaxCount();
-        int currentCount = PickerManager.$().getPickedCount();
-        return maxCount <= currentCount;
+        if (mPhotoParams.isMulti()) {
+            int maxCount = mPhotoParams.getMaxCount();
+            int currentCount = PickerManager.$().getPickedCount();
+            return maxCount <= currentCount;
+        }else {
+            return false;
+        }
     }
 
 }

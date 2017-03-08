@@ -2,13 +2,18 @@ package lx.photopicker.widget;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.BitmapRegionDecoder;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PointF;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
@@ -16,6 +21,10 @@ import android.view.View;
 import com.nineoldandroids.animation.Animator;
 import com.nineoldandroids.animation.AnimatorListenerAdapter;
 import com.nineoldandroids.animation.ValueAnimator;
+
+import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 
 import lx.photopicker.task.PhotoLoadCallback;
 import lx.photopicker.task.PhotoLoadTask;
@@ -31,6 +40,8 @@ import lx.photopicker.util.Pool;
 public class ClipPhotoView extends View implements PhotoLoadCallback
 {
 
+	private RectF mLoadPercentRectF;
+
 	public interface BitmapClipCallback
 	{
 		void onClipFinished(Bitmap bitmap);
@@ -44,12 +55,15 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	private Path mOverlapPath = new Path();
 	private int mOverlapColor = 0xAA000000;
 	private RectF mClipRect = new RectF();
-	private int[] mClipSize = new int[] { 200, 200 };
-	private int[] mBitmapWH = new int[2];
+
 	private RectF mBitmapRect = new RectF();
 
 	private volatile Bitmap mBitmap;
+	private volatile Bitmap mClipBitmap;
 	private int[] mWH = new int[2];
+	private int[] mClipSize = new int[] { 200, 200 };
+	private int[] mBitmapWH = new int[2];
+	private int[] mBitmapFullWH = new int[2];
 
 	private boolean isAnimating = false;
 	private volatile boolean isClipping = false;
@@ -58,6 +72,7 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	// 縮放控制
 	private volatile Matrix mCurrMatrix = new Matrix();
 	private volatile Matrix mSavedMatrix = new Matrix();
+	private volatile Matrix mScaleMatrix = new Matrix();
 
 	// 不同状态的表示：
 	private static final int TOUCH_NONE = 0;
@@ -69,13 +84,17 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	private PointF mStartPoint = new PointF();
 	private PointF mMidPoint = new PointF();
 	private float oriDis = 1f;
-	private float mMinScale;
-	private float mPreScale;
+	private float mMinScale = -1;
+	private float mMaxScale = -1;
 
-	private PhotoLoadTask mLoadTask;
 	private boolean isZipped;
 	private String mUrl;
-	private boolean isRegionMode = false;
+
+	private LoadHighQualityTask mLoadHighQualityTask = new LoadHighQualityTask();
+
+	private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors();// 线程池大小
+	private ThreadPoolExecutor mExecutor = (ThreadPoolExecutor) Executors.newFixedThreadPool(POOL_SIZE);// 线程池;
+	private Handler mHandler = new Handler(Looper.getMainLooper());
 
 	public ClipPhotoView(Context context)
 	{
@@ -101,7 +120,7 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 		mPaint.setAntiAlias(true);
 		mPaint.setColor(mOverlapColor);
 		mPaint.setFilterBitmap(true);
-		mPaint.setStrokeWidth(1);
+		mPaint.setStrokeWidth(2);
 	}
 
 	@Override
@@ -109,7 +128,7 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	{
 		mWH[0] = w;
 		mWH[1] = h;
-		setClipRect();
+		createClipRect();
 	}
 
 	@Override
@@ -117,19 +136,17 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	{
 		if (mBitmap != null)
 		{
-			if (!isRegionMode)
-			{
-				canvas.drawBitmap(mBitmap, mCurrMatrix, null);
-			} else
-			{
-				canvas.save();
-				canvas.translate(mWH[0] * mRegionTrans[2], mWH[1] * mRegionTrans[3]);
-				canvas.drawBitmap(mBitmap, mCurrMatrix, null);
-				canvas.restore();
-			}
+			canvas.drawBitmap(mBitmap, mCurrMatrix, null);
 		}
 		if (mMode == MODE_NONE)
 			return;
+		if (mTouchMode == TOUCH_NONE && !isAnimating && mClipBitmap != null)
+		{
+			canvas.save();
+			canvas.translate(mClipRect.left, mClipRect.top);
+			canvas.drawBitmap(mClipBitmap, mScaleMatrix, null);
+			canvas.restore();
+		}
 		mPaint.setStyle(Paint.Style.FILL);
 		mPaint.setColor(mOverlapColor);
 		canvas.drawPath(mOverlapPath, mPaint);
@@ -140,12 +157,89 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 		canvas.drawPath(mOverlapPath, mPaint);
 	}
 
-	private void setClipRect()
+	@Override
+	public boolean onTouchEvent(MotionEvent event)
+	{
+		if (isAnimating)
+			return super.onTouchEvent(event);
+		switch (event.getAction() & MotionEvent.ACTION_MASK)
+		{
+		// 单指
+		case MotionEvent.ACTION_DOWN:
+			recycleClipBitmap();
+			mSavedMatrix.set(mCurrMatrix);
+			mStartPoint.set(event.getX(), event.getY());
+			mTouchMode = TOUCH_DRAG;
+			break;
+		// 双指
+		case MotionEvent.ACTION_POINTER_DOWN:
+			getParent().requestDisallowInterceptTouchEvent(true);
+			oriDis = calculateDistance(event);
+			if (oriDis > 10f)
+			{
+				mSavedMatrix.set(mCurrMatrix);
+				mMidPoint = calculateMiddle(event);
+				mTouchMode = TOUCH_ZOOM;
+			}
+			break;
+		// 手指放开
+		case MotionEvent.ACTION_POINTER_UP:
+		case MotionEvent.ACTION_UP:
+			getParent().requestDisallowInterceptTouchEvent(false);
+			mSavedMatrix.set(mCurrMatrix);
+			mTouchMode = TOUCH_NONE;
+			clampZoomRange();
+			return false;
+		// 单指滑动事件
+		case MotionEvent.ACTION_MOVE:
+			if (mTouchMode == TOUCH_DRAG)
+			{
+				// 是一个手指拖动
+				mCurrMatrix.set(mSavedMatrix);
+				mCurrMatrix.postTranslate(event.getX() - mStartPoint.x, event.getY() - mStartPoint.y);
+				clampBitmapRectTranslation();
+			} else if (mTouchMode == TOUCH_ZOOM)
+			{
+				// 两个手指滑动
+				float newDist = calculateDistance(event);
+				if (newDist > 10f)
+				{
+					mCurrMatrix.set(mSavedMatrix);
+					float scale = newDist / oriDis;
+					mCurrMatrix.postScale(scale, scale, mBitmapRect.centerX(), mBitmapRect.centerY());
+					clampBitmapRectScale();
+					//					mCurrMatrix.postScale(scale, scale, mMidPoint.x,mMidPoint.y);
+					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+				}
+			}
+			break;
+		}
+		invalidate();
+		return true;
+	}
+
+	@Override
+	protected void onDetachedFromWindow()
+	{
+		super.onDetachedFromWindow();
+		if (mBitmap != null && !mBitmap.isRecycled())
+			mBitmap.recycle();
+		mBitmap = null;
+		recycleClipBitmap();
+		mClipBitmap = null;
+	}
+
+	/**
+	 * 根据ClipMode | ClipSize来计算裁剪区域
+	 * 根据mBitmap来进行初始缩放和平移（centerInside）
+	 * 并且初始化Bitmap的即时显示区域
+	 * */
+	private void createClipRect()
 	{
 		if (mMode == MODE_CLIP)
 		{
 			float percent = mClipSize[0] * 1.0f / mClipSize[1];
-			float h = mWH[0] /percent;
+			float h = mWH[0] / percent;
 			if (h <= mWH[1])
 			{
 				mClipRect.left = 20;
@@ -173,16 +267,19 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 			mClipRect.right = mWH[0];
 			mClipRect.top = 0;
 			mClipRect.bottom = mWH[1];
-			if (mBitmap != null) {
+			if (mBitmap != null)
+			{
 				float percent = mBitmap.getWidth() * 1.0f / mBitmap.getHeight();
-				float h = mWH[0] /percent;
-				if (h <= mWH[1]) {
+				float h = mWH[0] / percent;
+				if (h <= mWH[1])
+				{
 					mClipRect.left = 0;
 					mClipRect.right = mWH[0];
 					float rectHeight = mClipRect.width() / percent;
 					mClipRect.top = mWH[1] / 2.0f - rectHeight / 2.0f;
 					mClipRect.bottom = mWH[1] / 2.0f + rectHeight / 2.0f;
-				}else {
+				} else
+				{
 					mClipRect.top = 0;
 					mClipRect.bottom = mWH[1];
 					float rectWidth = mClipRect.height() * percent;
@@ -192,7 +289,6 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 			}
 
 		}
-
 		if (mBitmap != null)
 		{
 			mBitmapWH[0] = mBitmap.getWidth();
@@ -204,107 +300,14 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 			float transX = mWH[0] / 2.0f - mBitmapWH[0] / 2.0f;
 			float transY = mWH[1] / 2.0f - mBitmapWH[1] / 2.0f;
 			mCurrMatrix.setTranslate(transX, transY);
-			translateBitmapRect();
+			clampBitmapRectTranslation();
 			mMinScale = Math.max(mClipRect.width() / mBitmapWH[0], mClipRect.height() / mBitmapWH[1]);
-			mPreScale = mMinScale;
 			mCurrMatrix.postScale(mMinScale, mMinScale, mBitmapRect.centerX(), mBitmapRect.centerY());
-			scaleBitmapRect();
+			clampBitmapRectScale();
+			//			clampBitmapRectScale2(mBitmapRect.centerX(),mBitmapRect.centerY());
+			mMaxScale = Math.max(mBitmapFullWH[0] / mClipRect.width(), mBitmapFullWH[1] / mClipRect.height()) * 10.0f;
 		}
-	}
-
-	private void translateBitmapRect()
-	{
-		float[] values = new float[9];
-		mCurrMatrix.getValues(values);
-		mBitmapRect.offsetTo(values[2], values[5]);
-	}
-
-	private void scaleBitmapRect()
-	{
-		float[] values = new float[9];
-		mCurrMatrix.getValues(values);
-		final float scale = values[0];
-		final float newWidth = mBitmapWH[0] * scale / 2.0f;
-		final float newHeight = mBitmapWH[1] * scale / 2.0f;
-		final float centerX = mBitmapRect.centerX();
-		final float centerY = mBitmapRect.centerY();
-		mBitmapRect.left = centerX - newWidth;
-		mBitmapRect.right = centerX + newWidth;
-		mBitmapRect.top = centerY - newHeight;
-		mBitmapRect.bottom = centerY + newHeight;
-	}
-
-	public void setClipSize(int[] size)
-	{
-		mClipSize = size;
-	}
-
-	public void setClipMode(int mode)
-	{
-		mMode = mode;
-	}
-
-	public boolean canClip()
-	{
-		return mBitmap != null && !isClipping && !isAnimating;
-	}
-
-	public void clipBitmap(final BitmapClipCallback callback)
-	{
-		isClipping = true;
-		Pool.Task task = new Pool.Task()
-		{
-			@Override
-			protected void work()
-			{
-				Bitmap copyBitmap = Bitmap.createBitmap(mWH[0], mWH[1], Bitmap.Config.ARGB_8888);
-				Canvas canvas = new Canvas(copyBitmap);
-				canvas.drawColor(Color.WHITE);
-				canvas.drawBitmap(mBitmap, mCurrMatrix, null);
-				final Bitmap bitmap = Bitmap.createBitmap(copyBitmap, (int) mClipRect.left, (int) mClipRect.top, (int) mClipRect.width(),
-						(int) mClipRect.height());
-				if (!copyBitmap.isRecycled())
-					copyBitmap.recycle();
-				if (bitmap.getWidth() != mClipSize[0])
-				{
-					float percent = mClipSize[0] * 1.0f / bitmap.getWidth();
-					final Bitmap resizedBitmap = Bitmap.createBitmap(mClipSize[0], mClipSize[1], Bitmap.Config.ARGB_8888);
-					Canvas resizedCanvas = new Canvas(resizedBitmap);
-					Matrix matrix = new Matrix();
-					matrix.setScale(percent, percent);
-					resizedCanvas.drawBitmap(bitmap, matrix, null);
-					if (!bitmap.isRecycled())
-						bitmap.recycle();
-					if (callback != null)
-					{
-						getHandler().post(new Runnable()
-						{
-							@Override
-							public void run()
-							{
-								callback.onClipFinished(resizedBitmap);
-							}
-						});
-					}
-				} else
-				{
-					if (callback != null)
-					{
-						getHandler().post(new Runnable()
-						{
-							@Override
-							public void run()
-							{
-								callback.onClipFinished(bitmap);
-							}
-						});
-					}
-
-				}
-				isClipping = false;
-			}
-		};
-		Pool.execute(task);
+		invalidate();
 	}
 
 	// 计算两个触摸点之间的距离
@@ -323,7 +326,35 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 		return new PointF(x / 2, y / 2);
 	}
 
-	//校准是否拖拽超出了裁剪框边界
+	private void clampBitmapRectTranslation()
+	{
+		float[] values = new float[9];
+		mCurrMatrix.getValues(values);
+		mBitmapRect.offsetTo(values[2], values[5]);
+	}
+
+	private void clampBitmapRectScale()
+	{
+		float[] values = new float[9];
+		mCurrMatrix.getValues(values);
+		final float scale = values[0];
+		final float newWidth = mBitmapWH[0] * scale / 2.0f;
+		final float newHeight = mBitmapWH[1] * scale / 2.0f;
+		final float centerX = mBitmapRect.centerX();
+		final float centerY = mBitmapRect.centerY();
+		mBitmapRect.left = centerX - newWidth;
+		mBitmapRect.right = centerX + newWidth;
+		mBitmapRect.top = centerY - newHeight;
+		mBitmapRect.bottom = centerY + newHeight;
+	}
+
+	private void clampBitmapRectScale2(float pointX, float pointY)
+	{
+	}
+
+	/**
+	 * 修正手势拖拽位置的方法。
+	 * */
 	private void clampDragRange()
 	{
 		float[] values = new float[9];
@@ -358,7 +389,7 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 					float currY = animation.getAnimatedFraction() * dY;
 					mCurrMatrix.set(mSavedMatrix);
 					mCurrMatrix.postTranslate(currX, currY);
-					translateBitmapRect();
+					clampBitmapRectTranslation();
 					invalidate();
 				}
 			});
@@ -370,6 +401,7 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 					mSavedMatrix.set(mCurrMatrix);
 					invalidate();
 					isAnimating = false;
+					loadHighQualityBitmap();
 				}
 			});
 			va.setDuration((long) Math.min(250.0f, Math.max(Math.abs(dX), Math.abs(dY)) * 10.0f));
@@ -378,28 +410,34 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 		} else
 		{
 			isAnimating = false;
+			loadHighQualityBitmap();
 		}
 	}
 
-	private void clampScaleRange()
+	/**
+	 * 修正手势缩放比例的方法。
+	 * */
+	private void clampZoomRange()
 	{
 
 		float[] values = new float[9];
 		mCurrMatrix.getValues(values);
-		if (values[0] < mMinScale)
+		if (mMinScale != -1 && values[0] < mMinScale)
 		{
 			final float result = mMinScale / values[0];
-			com.nineoldandroids.animation.ValueAnimator va = com.nineoldandroids.animation.ValueAnimator.ofFloat(1.0f, result);
+			ValueAnimator va = ValueAnimator.ofFloat(1.0f, result);
 			va.setDuration((long) Math.min(250.0f, Math.abs(result * 50.0f)));
-			va.addUpdateListener(new com.nineoldandroids.animation.ValueAnimator.AnimatorUpdateListener()
+			va.addUpdateListener(new ValueAnimator.AnimatorUpdateListener()
 			{
 				@Override
-				public void onAnimationUpdate(com.nineoldandroids.animation.ValueAnimator animation)
+				public void onAnimationUpdate(ValueAnimator animation)
 				{
 					final float curr = (float) animation.getAnimatedValue();
 					mCurrMatrix.set(mSavedMatrix);
 					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
-					scaleBitmapRect();
+					clampBitmapRectScale();
+					//					mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
+					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
 				}
 			});
@@ -409,9 +447,44 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				public void onAnimationEnd(Animator animation)
 				{
 					mSavedMatrix.set(mCurrMatrix);
-					scaleBitmapRect();
+					clampBitmapRectScale();
+					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
-					translateBitmapRect();
+					clampBitmapRectTranslation();
+					clampDragRange();
+				}
+			});
+			isAnimating = true;
+			va.start();
+		} else if (mMaxScale != -1 && values[0] > mMaxScale)
+		{
+			final float result = mMaxScale / values[0];
+			ValueAnimator va = ValueAnimator.ofFloat(1.0f, result);
+			va.setDuration((long) Math.min(250.0f, Math.abs(1.0f / result * 50.0f)));
+			va.addUpdateListener(new ValueAnimator.AnimatorUpdateListener()
+			{
+				@Override
+				public void onAnimationUpdate(ValueAnimator animation)
+				{
+					final float curr = (float) animation.getAnimatedValue();
+					mCurrMatrix.set(mSavedMatrix);
+					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
+					clampBitmapRectScale();
+					//					mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
+					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+					invalidate();
+				}
+			});
+			va.addListener(new AnimatorListenerAdapter()
+			{
+				@Override
+				public void onAnimationEnd(Animator animation)
+				{
+					mSavedMatrix.set(mCurrMatrix);
+					clampBitmapRectScale();
+					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+					invalidate();
+					clampBitmapRectTranslation();
 					clampDragRange();
 				}
 			});
@@ -424,67 +497,96 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 	}
 
 	@Override
-	public boolean onTouchEvent(MotionEvent event)
+	public void onLoadBitmapSize(int width, int height)
 	{
-		if (isAnimating)
-			return super.onTouchEvent(event);
-		switch (event.getAction() & MotionEvent.ACTION_MASK)
+		mBitmapFullWH[0] = width;
+		mBitmapFullWH[1] = height;
+	}
+
+	/**
+	 * 读取图片的回调
+	 * 如果是第一次读取，则赋值给mBitmap
+	 * 如果不是第一次读取（高质量局部加载），则赋值给mClipBitmap
+	 * */
+	@Override
+	public void onLoadFinished(Bitmap bitmap, boolean isZipped, RectF loadPercentRectF)
+	{
+		if (bitmap == null)
+			return;
+		if (isFirstLoad)
 		{
-		// 单指
-		case MotionEvent.ACTION_DOWN:
-			mSavedMatrix.set(mCurrMatrix);
-			mStartPoint.set(event.getX(), event.getY());
-			mTouchMode = TOUCH_DRAG;
-			break;
-		// 双指
-		case MotionEvent.ACTION_POINTER_DOWN:
-			getParent().requestDisallowInterceptTouchEvent(true);
-			oriDis = calculateDistance(event);
-			if (oriDis > 10f)
+			this.isZipped = isZipped;
+			setBitmap(bitmap);
+		} else if (loadPercentRectF != null)
+		{
+			recycleClipBitmap();
+			isClipping = false;
+			if (mLoadPercentRectF.left != loadPercentRectF.left
+					|| mLoadPercentRectF.right != loadPercentRectF.right
+					|| mLoadPercentRectF.top != loadPercentRectF.top
+					|| mLoadPercentRectF.bottom != loadPercentRectF.bottom
+					|| mTouchMode != TOUCH_NONE)
 			{
-				mSavedMatrix.set(mCurrMatrix);
-				mMidPoint = calculateMiddle(event);
-				mTouchMode = TOUCH_ZOOM;
+				bitmap.recycle();
+			}else {
+
+				this.mClipBitmap = bitmap;
+				float scalePercent = mClipRect.width() / bitmap.getWidth();
+				mScaleMatrix.setScale(scalePercent, scalePercent);
+				invalidate();
 			}
-			break;
-		// 手指放开
-		case MotionEvent.ACTION_POINTER_UP:
-		case MotionEvent.ACTION_UP:
-			getParent().requestDisallowInterceptTouchEvent(false);
-			mSavedMatrix.set(mCurrMatrix);
-			if (mTouchMode == TOUCH_ZOOM)
-			{
-				clampScaleRange();
-			} else if (mTouchMode == TOUCH_DRAG)
-			{
-				clampDragRange();
-			}
-			mTouchMode = TOUCH_NONE;
-			return false;
-		// 单指滑动事件
-		case MotionEvent.ACTION_MOVE:
-			if (mTouchMode == TOUCH_DRAG)
-			{
-				// 是一个手指拖动
-				mCurrMatrix.set(mSavedMatrix);
-				mCurrMatrix.postTranslate(event.getX() - mStartPoint.x, event.getY() - mStartPoint.y);
-				translateBitmapRect();
-			} else if (mTouchMode == TOUCH_ZOOM)
-			{
-				// 两个手指滑动
-				float newDist = calculateDistance(event);
-				if (newDist > 10f)
-				{
-					mCurrMatrix.set(mSavedMatrix);
-					float scale = newDist / oriDis;
-					mCurrMatrix.postScale(scale, scale, mBitmapRect.centerX(), mBitmapRect.centerY());
-					scaleBitmapRect();
-				}
-			}
-			break;
 		}
-		invalidate();
-		return true;
+	}
+
+	private void recycleClipBitmap()
+	{
+		if (this.mClipBitmap != null && !this.mClipBitmap.isRecycled())
+			this.mClipBitmap.recycle();
+		this.mClipBitmap = null;
+	}
+
+	/**
+	 * 将图片的裁剪区域部分以高质量加载的方法
+	 * 如果图片原本就是最高质量 | 没有图片的url，则不进行加载。
+	 * */
+	private void loadHighQualityBitmap()
+	{
+		if (!isZipped || mUrl == null || mTouchMode != TOUCH_NONE || mMode == MODE_NONE)
+			return;
+		mLoadPercentRectF = new RectF();
+		mLoadPercentRectF.left = mBitmapRect.left >= mClipRect.left ? 0.0f : (mBitmapRect.left - mClipRect.left) / mBitmapRect.width();
+		mLoadPercentRectF.right = mBitmapRect.right <= mClipRect.right ? 1.0f : 1.0f - (mBitmapRect.right - mClipRect.right) / mBitmapRect.width();
+		mLoadPercentRectF.top = mBitmapRect.top >= mClipRect.top ? 0 : (mBitmapRect.top - mClipRect.top) / mBitmapRect.height();
+		mLoadPercentRectF.bottom = mBitmapRect.bottom <= mClipRect.bottom ? 1.0f : 1.0f - (mBitmapRect.bottom - mClipRect.bottom) / mBitmapRect.height();
+		mLoadHighQualityTask.setLoadingRectF(mLoadPercentRectF);
+		mHandler.removeCallbacksAndMessages(null);
+		mHandler.postDelayed(mLoadHighQualityTask, 1000);
+	}
+
+	public void setExecutor(ThreadPoolExecutor executor)
+	{
+		if (executor == null)
+			return;
+		if (this.mExecutor != null)
+			this.mExecutor.shutdown();
+		this.mExecutor = executor;
+	}
+
+	public void setUrl(String url)
+	{
+		mUrl = url;
+		isFirstLoad = true;
+		mExecutor.execute(new PhotoLoadTask(url, this));
+	}
+
+	public void setClipSize(int[] size)
+	{
+		mClipSize = size;
+	}
+
+	public void setClipMode(int mode)
+	{
+		mMode = mode;
 	}
 
 	public Bitmap getBitmap()
@@ -498,75 +600,187 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 		if (this.mBitmap != null && !this.mBitmap.isRecycled())
 			this.mBitmap.recycle();
 		this.mBitmap = bitmap;
-		setClipRect();
-		postInvalidate();
+		createClipRect();
 	}
 
-	public void setPath(String path)
+	/**
+	 * 判断当前是否可以进行图片裁剪
+	 * @return true可裁剪 | false不可裁剪
+	 * */
+	public boolean canClip()
 	{
-		mUrl = path;
-		isFirstLoad = true;
-		mLoadTask = new PhotoLoadTask(path, this);
-		Pool.execute(mLoadTask);
+		return mBitmap != null && !isClipping && !isAnimating && mTouchMode == TOUCH_NONE;
 	}
 
-	@Override
-	public void onLoadFinished(Bitmap bitmap, boolean isZipped)
+	/**
+	 * 获取裁剪图片的方法
+	 * 使用前最好调用canClip()判断是否在可裁剪状态。否则可能会出现不可预知的结果。
+	 * @param callback 回调
+	 * */
+	public void clipBitmap(BitmapClipCallback callback)
 	{
-		if (isFirstLoad)
+		isClipping = true;
+		if (mClipBitmap != null && !mClipBitmap.isRecycled())
 		{
-			this.isZipped = isZipped;
-			setBitmap(bitmap);
+			callback.onClipFinished(mClipBitmap);
+			mClipBitmap = null;
 		} else
 		{
-			if (this.mBitmap != null && !this.mBitmap.isRecycled())
-				this.mBitmap.recycle();
-			this.mBitmap = bitmap;
-			isRegionMode = true;
-			invalidate();
+			if (mUrl == null)
+			{
+				clipByDisplayBitmap(callback);
+			} else
+			{
+				clipByLoadHighQuality(mUrl, callback);
+			}
 		}
 	}
 
-	//TODO 配合缩放这个太难算了..
-	private void calculateIsNeedLoad()
+	/**
+	 * 有图片url（setUrl(String url)）的情况下，以尽量高的质量读取裁剪区域的Bitmap。
+	 * @param url 图片的url地址
+	 * @param callback 接收裁剪后的Bitmap的回调对象。
+	 * */
+	private void clipByLoadHighQuality(final String url, final BitmapClipCallback callback)
 	{
-		if (!isZipped)
-			return;
-		scaleBitmapRect();
-		translateBitmapRect();
-		float[] values = new float[9];
-		mCurrMatrix.getValues(values);
-		RectF rectF = new RectF();
-		rectF.left = mBitmapRect.left >= 0 ? 0.0f : mBitmapRect.left / mBitmapRect.width();
-		rectF.right = mBitmapRect.right <= mWH[0] ? 1.0f : 1.0f - (mBitmapRect.right - (float) mWH[0]) / mBitmapRect.width();
-		rectF.top = mBitmapRect.top >= 0 ? 0 : mBitmapRect.top / mBitmapRect.height();
-		rectF.bottom = mBitmapRect.bottom <= mWH[1] ? 1.0f : 1.0f - (mBitmapRect.bottom - (float) mWH[1]) / mBitmapRect.height();
-		if (mLoadTask == null)
+		final RectF loadPercent = new RectF();
+		loadPercent.left = mBitmapRect.left >= mClipRect.left ? 0.0f : (mBitmapRect.left - mClipRect.left) / mBitmapRect.width();
+		loadPercent.right = mBitmapRect.right <= mClipRect.right ? 1.0f : 1.0f - (mBitmapRect.right - mClipRect.right) / mBitmapRect.width();
+		loadPercent.top = mBitmapRect.top >= mClipRect.top ? 0 : (mBitmapRect.top - mClipRect.top) / mBitmapRect.height();
+		loadPercent.bottom = mBitmapRect.bottom <= mClipRect.bottom ? 1.0f : 1.0f - (mBitmapRect.bottom - mClipRect.bottom) / mBitmapRect.height();
+		Pool.Task task = new Pool.Task()
 		{
-			mLoadTask = new PhotoLoadTask(mUrl, rectF, this);
-		} else
+			@Override
+			protected void work()
+			{
+				BitmapFactory.Options options = new BitmapFactory.Options();
+				options.inJustDecodeBounds = true;
+				BitmapFactory.decodeFile(url, options);
+				options.inJustDecodeBounds = false;
+				Runtime runtime = Runtime.getRuntime();
+				float availableSize = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory()) / 32.0f / 8.0f;
+				Rect rect = new Rect();
+				rect.left = (int) (-loadPercent.left * options.outWidth);
+				rect.right = (int) (loadPercent.right * options.outWidth);
+				rect.top = (int) (-loadPercent.top * options.outHeight);
+				rect.bottom = (int) (loadPercent.bottom * options.outHeight);
+				float percent = rect.width() * 1.0f / rect.height();
+				int availableW = (int) (availableSize / percent);
+				int availableH = (int) (availableSize * percent);
+				options.inSampleSize = Math.min(rect.width() / availableW, rect.height() / availableH);
+				if (options.inSampleSize < 1)
+					options.inSampleSize = 1;
+				BitmapRegionDecoder bitmapRegionDecoder = null;
+				try
+				{
+					bitmapRegionDecoder = BitmapRegionDecoder.newInstance(url, true);
+
+				} catch (IOException e)
+				{
+					e.printStackTrace();
+				}
+				final Bitmap bitmap = bitmapRegionDecoder.decodeRegion(rect, options);
+				if (callback != null)
+				{
+					getHandler().post(new Runnable()
+					{
+						@Override
+						public void run()
+						{
+							callback.onClipFinished(bitmap);
+							isClipping = false;
+						}
+					});
+				} else
+				{
+					isClipping = false;
+				}
+			}
+		};
+		mExecutor.execute(task);
+	}
+
+	/**
+	 * 没有图片url（直接setBitmap(Bitmap bitmap)）的情况下，直接裁剪显示的Bitmap。
+	 * @param callback 接收裁剪后的Bitmap的回调对象。
+	 * */
+	private void clipByDisplayBitmap(final BitmapClipCallback callback)
+	{
+		Pool.Task task = new Pool.Task()
 		{
-			updateRegionTrans(rectF);
-			mLoadTask.updateRect(rectF);
+			@Override
+			protected void work()
+			{
+				Bitmap copyBitmap = Bitmap.createBitmap(mWH[0], mWH[1], Bitmap.Config.ARGB_8888);
+				Canvas canvas = new Canvas(copyBitmap);
+				canvas.drawColor(Color.WHITE);
+				canvas.drawBitmap(mBitmap, mCurrMatrix, null);
+				final Bitmap bitmap = Bitmap.createBitmap(copyBitmap, (int) mClipRect.left, (int) mClipRect.top, (int) mClipRect.width(),
+						(int) mClipRect.height());
+				if (!copyBitmap.isRecycled())
+					copyBitmap.recycle();
+				if (bitmap.getWidth() != mClipSize[0])
+				{
+					float percent = mClipSize[0] * 1.0f / bitmap.getWidth();
+					final Bitmap resizedBitmap = Bitmap.createBitmap(mClipSize[0], mClipSize[1], Bitmap.Config.ARGB_8888);
+					Canvas resizedCanvas = new Canvas(resizedBitmap);
+					Matrix matrix = new Matrix();
+					matrix.setScale(percent, percent);
+					resizedCanvas.drawBitmap(bitmap, matrix, null);
+					if (!bitmap.isRecycled())
+						bitmap.recycle();
+					if (callback != null)
+					{
+						getHandler().post(new Runnable()
+						{
+							@Override
+							public void run()
+							{
+								callback.onClipFinished(resizedBitmap);
+								isClipping = false;
+							}
+						});
+					} else
+					{
+						isClipping = false;
+					}
+				} else
+				{
+					if (callback != null)
+					{
+						getHandler().post(new Runnable()
+						{
+							@Override
+							public void run()
+							{
+								callback.onClipFinished(bitmap);
+								isClipping = false;
+							}
+						});
+					} else
+					{
+						isClipping = false;
+					}
+				}
+			}
+		};
+		mExecutor.execute(task);
+	}
+
+	private class LoadHighQualityTask implements Runnable
+	{
+		private RectF loading;
+
+		public LoadHighQualityTask setLoadingRectF(RectF rectF)
+		{
+			this.loading = rectF;
+			return this;
 		}
-		Pool.execute(mLoadTask);
-	}
 
-	private volatile float[] mRegionTrans = new float[4];
-
-	private void updateRegionTrans(RectF rectF)
-	{
-		mRegionTrans[0] = 1.0f - (1.0f - rectF.right) - rectF.left;
-		mRegionTrans[1] = 1.0f - (1.0f - rectF.bottom) - rectF.top;
-		mRegionTrans[2] = (rectF.left + (1.0f - rectF.right));
-		mRegionTrans[3] = (rectF.top + (1.0f - rectF.bottom));
-	}
-
-	@Override
-	protected void onDetachedFromWindow()
-	{
-		super.onDetachedFromWindow();
-		if (mBitmap != null && !mBitmap.isRecycled())
-			mBitmap.recycle();
+		@Override
+		public void run()
+		{
+			mExecutor.execute(new PhotoLoadTask(mUrl, loading, ClipPhotoView.this));
+		}
 	}
 }

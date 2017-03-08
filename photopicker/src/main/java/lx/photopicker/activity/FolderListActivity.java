@@ -233,13 +233,14 @@ public class FolderListActivity extends BaseActivity implements View.OnClickList
     }
 
     private void finalFinish() {
-        mOwnStateLayout.setState(OwnStateLayout.STATE_LOADING);
-        if (mPickedPhotosListHolder != null)
-            folderList_fl_container.removeView(mPickedPhotosListHolder.getRootView());
-        part_title_fl_back.setVisibility(View.INVISIBLE);
-        part_title_fl_back.setEnabled(false);
         if (PickerManager.$().doCallback(this)) {
             finish();
+        }else {
+            mOwnStateLayout.setState(OwnStateLayout.STATE_LOADING);
+            if (mPickedPhotosListHolder != null)
+                folderList_fl_container.removeView(mPickedPhotosListHolder.getRootView());
+            part_title_fl_back.setVisibility(View.INVISIBLE);
+            part_title_fl_back.setEnabled(false);
         }
     }
 

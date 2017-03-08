@@ -2,7 +2,6 @@ package lx.photopicker.task;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -23,13 +22,13 @@ import lx.photopicker.util.Pool;
  */
 
 public class SizeClipTask extends Pool.Task {
-    private List<PhotoEntity> mPhotos;
+    private List<PhotoEntity> mPhotos = new ArrayList<>();
     private List<PhotoEntity> mClipPhotos = new ArrayList<>();
     private String mDir;
     private SizeClipCallback mCallback;
 
     public SizeClipTask(List<PhotoEntity> mPhotos, String mDir, SizeClipCallback mCallback) {
-        this.mPhotos = mPhotos;
+        this.mPhotos.addAll(mPhotos);
         this.mDir = mDir;
         this.mCallback = mCallback;
     }
@@ -63,7 +62,6 @@ public class SizeClipTask extends Pool.Task {
             options.inJustDecodeBounds = false;
             File file = new File(photo.getPath());
             if (file.length() / 1024.0f > 200.0f || options.inSampleSize != 1) {
-
                 Bitmap bitmap = BitmapFactory.decodeFile(photo.getPath(), options);
                 //通过设置图片质量，来控制图片文件的大小
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -77,7 +75,6 @@ public class SizeClipTask extends Pool.Task {
                 } else if (quality > 100) {
                     quality = 100;
                 }
-                Log.wtf("1","quality(): " + quality);
                 bitmap.compress(Bitmap.CompressFormat.JPEG, quality, baos);
                 if (!bitmap.isRecycled())
                     bitmap.recycle();

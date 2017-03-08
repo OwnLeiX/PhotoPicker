@@ -22,7 +22,7 @@ public class PhotoLoadTask extends Pool.Task
 {
 	private String mPath;
 	private PhotoLoadCallback mListener;
-	private RectF mLoadRectF;
+	private RectF mLoadPercentRectF;
 	private boolean isZipped = false;
 
 	public PhotoLoadTask(PhotoEntity photo, PhotoLoadCallback listener)
@@ -44,7 +44,7 @@ public class PhotoLoadTask extends Pool.Task
 	{
 		this.mPath = path;
 		this.mListener = listener;
-		this.mLoadRectF = loadRect;
+		this.mLoadPercentRectF = loadRect;
 	}
 
 	public void upDatePath(String path)
@@ -54,7 +54,7 @@ public class PhotoLoadTask extends Pool.Task
 
 	public void updateRect(RectF rectF)
 	{
-		this.mLoadRectF = rectF;
+		this.mLoadPercentRectF = rectF;
 	}
 
 	public String getPath()
@@ -68,52 +68,45 @@ public class PhotoLoadTask extends Pool.Task
 		BitmapFactory.Options options = new BitmapFactory.Options();
 		options.inJustDecodeBounds = true;
 		BitmapFactory.decodeFile(mPath, options);
-		Runtime runtime = Runtime.getRuntime();
-		float availableSize = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory())/ 32.0f / 8.0f;
-		if (mLoadRectF == null)
-		{
-			float percent = options.outHeight * 1.0f / options.outWidth;
-			int availableW = (int) (availableSize / percent);
-			int availableH = (int) (availableSize * percent);
-			if (availableW > 1080)
-				availableW = 1080;
-			if (availableH > 1920)
-				availableH = 1920;
-			options.inSampleSize = calculateInSampleSize(options, availableW, availableH);
-		} else
-		{
-			float percent = mLoadRectF.width() / mLoadRectF.height();
-			int availableW = (int) (availableSize / percent);
-			int availableH = (int) (availableSize * percent);
-			if (availableW > 1080)
-				availableW = 1080;
-			if (availableH > 1920)
-				availableH = 1920;
-			options.inSampleSize = calculateInSampleSize(options, availableW, availableH);
-		}
-		isZipped = options.inSampleSize > 1.0f;
 		options.inJustDecodeBounds = false;
-		final Bitmap bitmap;
-		if (mLoadRectF == null)
+		Runtime runtime = Runtime.getRuntime();
+		if (mListener != null)
 		{
-			bitmap = BitmapFactory.decodeFile(mPath, options);
+			final int width = options.outWidth;
+			final int height = options.outHeight;
+			getHandler().post(new Runnable()
+			{
+				@Override
+				public void run()
+				{
+					mListener.onLoadBitmapSize(width, height);
+
+				}
+			});
+		}
+		float availableSize = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory()) / 64.0f / 8.0f;
+		if (mLoadPercentRectF == null)
+		{
+			loadFullBitmap(options, availableSize);
 		} else
 		{
-			BitmapRegionDecoder bitmapRegionDecoder = null;
-			try
-			{
-				bitmapRegionDecoder = BitmapRegionDecoder.newInstance(mPath, true);
-			} catch (IOException e)
-			{
-				e.printStackTrace();
-			}
-			Rect rect = new Rect();
-			rect.left = (int) (-mLoadRectF.left * options.outWidth);
-			rect.right = (int) (mLoadRectF.right * options.outWidth);
-			rect.top = (int) (-mLoadRectF.top * options.outHeight);
-			rect.bottom = (int) (mLoadRectF.bottom * options.outHeight);
-			bitmap = bitmapRegionDecoder.decodeRegion(rect, options);
+			loadPartBitmap(options, availableSize);
 		}
+
+	}
+
+	private void loadFullBitmap(BitmapFactory.Options options, float availableSize)
+	{
+		float percent = options.outHeight * 1.0f / options.outWidth;
+		int availableW = (int) (availableSize / percent);
+		int availableH = (int) (availableSize * percent);
+		if (availableW > 1080)
+			availableW = 1080;
+		if (availableH > 1920)
+			availableH = 1920;
+		options.inSampleSize = calculateInSampleSize(options, availableW, availableH);
+		isZipped = options.inSampleSize > 1.0f;
+		final Bitmap bitmap = BitmapFactory.decodeFile(mPath, options);
 		if (mListener != null)
 		{
 			getHandler().post(new Runnable()
@@ -121,7 +114,50 @@ public class PhotoLoadTask extends Pool.Task
 				@Override
 				public void run()
 				{
-					mListener.onLoadFinished(bitmap, isZipped);
+					mListener.onLoadFinished(bitmap, isZipped, mLoadPercentRectF);
+
+				}
+			});
+		}
+	}
+
+	private void loadPartBitmap(BitmapFactory.Options options, float availableSize)
+	{
+		Rect rect = new Rect();
+		rect.left = (int) (-mLoadPercentRectF.left * options.outWidth);
+		rect.right = (int) (mLoadPercentRectF.right * options.outWidth);
+		rect.top = (int) (-mLoadPercentRectF.top * options.outHeight);
+		rect.bottom = (int) (mLoadPercentRectF.bottom * options.outHeight);
+		float percent = rect.width() * 1.0f / rect.height();
+		int availableW = (int) (availableSize / percent);
+		if (availableW > 1920)
+			availableW = 1920;
+		int availableH = (int) (availableSize * percent);
+		if (availableH > 1920)
+			availableH = 1920;
+		if (availableW <= 5 || availableH <= 5)
+			return;
+		options.inSampleSize = Math.max(rect.width() / availableW, rect.height() / availableH);
+		if (options.inSampleSize < 1)
+			options.inSampleSize = 1;
+		isZipped = options.inSampleSize > 1.0f;
+		BitmapRegionDecoder bitmapRegionDecoder = null;
+		try
+		{
+			bitmapRegionDecoder = BitmapRegionDecoder.newInstance(mPath, true);
+		} catch (IOException e)
+		{
+			e.printStackTrace();
+		}
+		final Bitmap bitmap = bitmapRegionDecoder.decodeRegion(rect, options);
+		if (mListener != null)
+		{
+			getHandler().post(new Runnable()
+			{
+				@Override
+				public void run()
+				{
+					mListener.onLoadFinished(bitmap, isZipped, mLoadPercentRectF);
 
 				}
 			});
@@ -142,7 +178,6 @@ public class PhotoLoadTask extends Pool.Task
 
 			final float halfHeight = height / 2.0f;
 			final float halfWidth = width / 2.0f;
-
 			// 压缩比例值每次循环两倍增加,
 			// 直到原图宽高值的一半除以压缩值后都~大于所需宽高值为止
 			while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth)
@@ -150,7 +185,6 @@ public class PhotoLoadTask extends Pool.Task
 				inSampleSize *= 2;
 			}
 		}
-
 		return inSampleSize;
 	}
 }

@@ -39,6 +39,7 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
     protected void onInitView() {
         mPhotoParams = PickerManager.$().getPhotoParams();
         photoClip_cpv_photo = (ClipPhotoView) findViewById(R.id.photoClip_cpv_photo);
+        photoClip_cpv_photo.setExecutor(Pool.$());
         photoClip_tv_pick = (TextView) findViewById(R.id.photoClip_tv_pick);
         photoClip_fl_back = (FrameLayout) findViewById(R.id.photoClip_fl_back);
         photoClip_cb_native = (CheckBox) findViewById(R.id.photoClip_cb_native);
@@ -57,7 +58,7 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
     @Override
     protected void onInitData() {
         mCurrentPhoto = PickerManager.$().getCurrentPhoto();
-        photoClip_cpv_photo.setPath(mCurrentPhoto.getPath());
+        photoClip_cpv_photo.setUrl(mCurrentPhoto.getPath());
     }
 
     @Override
