@@ -206,10 +206,10 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				{
 					mCurrMatrix.set(mSavedMatrix);
 					float scale = newDist / oriDis;
-					mCurrMatrix.postScale(scale, scale, mBitmapRect.centerX(), mBitmapRect.centerY());
-					clampBitmapRectScale();
-					//					mCurrMatrix.postScale(scale, scale, mMidPoint.x,mMidPoint.y);
-					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+//					mCurrMatrix.postScale(scale, scale, mBitmapRect.centerX(), mBitmapRect.centerY());
+//					clampBitmapRectScale();
+										mCurrMatrix.postScale(scale, scale, mMidPoint.x,mMidPoint.y);
+										clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 				}
 			}
 			break;
@@ -303,8 +303,8 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 			clampBitmapRectTranslation();
 			mMinScale = Math.max(mClipRect.width() / mBitmapWH[0], mClipRect.height() / mBitmapWH[1]);
 			mCurrMatrix.postScale(mMinScale, mMinScale, mBitmapRect.centerX(), mBitmapRect.centerY());
-			clampBitmapRectScale();
-			//			clampBitmapRectScale2(mBitmapRect.centerX(),mBitmapRect.centerY());
+//			clampBitmapRectScale();
+						clampBitmapRectScale2(mBitmapRect.centerX(),mBitmapRect.centerY());
 			mMaxScale = Math.max(mBitmapFullWH[0] / mClipRect.width(), mBitmapFullWH[1] / mClipRect.height()) * 10.0f;
 		}
 		invalidate();
@@ -350,6 +350,21 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 
 	private void clampBitmapRectScale2(float pointX, float pointY)
 	{
+		float[] values = new float[9];
+		mCurrMatrix.getValues(values);
+		final float scale = values[0];
+		final float oldW = mBitmapRect.width();
+		final float oldH = mBitmapRect.height();
+		final float leftPercent = (pointX - mBitmapRect.left) / oldW;
+		final float rightPercent = (mBitmapRect.right - pointX) / oldW;
+		final float topPercent = (pointY - mBitmapRect.top) / oldH;
+		final float bottomPercent = (mBitmapRect.bottom - pointY) / oldH;
+		final float newW = mBitmapWH[0] * scale;
+		final float newH = mBitmapWH[1] * scale;
+		mBitmapRect.left = pointX - newW * leftPercent;
+		mBitmapRect.right = pointX + newW * rightPercent;
+		mBitmapRect.top = pointY - newH * topPercent;
+		mBitmapRect.bottom = pointY + newH * bottomPercent;
 	}
 
 	/**
@@ -434,10 +449,10 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				{
 					final float curr = (float) animation.getAnimatedValue();
 					mCurrMatrix.set(mSavedMatrix);
-					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
-					clampBitmapRectScale();
-					//					mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
-					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+//					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
+//					clampBitmapRectScale();
+										mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
+										clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
 				}
 			});
@@ -447,8 +462,8 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				public void onAnimationEnd(Animator animation)
 				{
 					mSavedMatrix.set(mCurrMatrix);
-					clampBitmapRectScale();
-					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+//					clampBitmapRectScale();
+										clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
 					clampBitmapRectTranslation();
 					clampDragRange();
@@ -468,10 +483,10 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				{
 					final float curr = (float) animation.getAnimatedValue();
 					mCurrMatrix.set(mSavedMatrix);
-					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
-					clampBitmapRectScale();
-					//					mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
-					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+//					mCurrMatrix.postScale(curr, curr, mBitmapRect.centerX(), mBitmapRect.centerY());
+//					clampBitmapRectScale();
+										mCurrMatrix.postScale(curr, curr, mMidPoint.x,mMidPoint.y);
+										clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
 				}
 			});
@@ -481,8 +496,8 @@ public class ClipPhotoView extends View implements PhotoLoadCallback
 				public void onAnimationEnd(Animator animation)
 				{
 					mSavedMatrix.set(mCurrMatrix);
-					clampBitmapRectScale();
-					//					clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
+//					clampBitmapRectScale();
+										clampBitmapRectScale2(mMidPoint.x,mMidPoint.y);
 					invalidate();
 					clampBitmapRectTranslation();
 					clampDragRange();

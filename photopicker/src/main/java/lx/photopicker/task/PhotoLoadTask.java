@@ -84,7 +84,19 @@ public class PhotoLoadTask extends Pool.Task
 				}
 			});
 		}
-		float availableSize = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory()) / 64.0f / 8.0f;
+		float availableSize = (runtime.maxMemory() - runtime.totalMemory() + runtime.freeMemory());
+		availableSize /= 8.0f;
+		Bitmap.Config config = options.inPreferredConfig;
+		if (config == Bitmap.Config.ARGB_8888)
+		{
+			availableSize /= 5.0f;
+		} else if (config == Bitmap.Config.ARGB_4444 || config == Bitmap.Config.RGB_565)
+		{
+			availableSize /= 3.0f;
+		} else
+		{
+			availableSize /= 5.0f;
+		}
 		if (mLoadPercentRectF == null)
 		{
 			loadFullBitmap(options, availableSize);
@@ -98,8 +110,8 @@ public class PhotoLoadTask extends Pool.Task
 	private void loadFullBitmap(BitmapFactory.Options options, float availableSize)
 	{
 		float percent = options.outHeight * 1.0f / options.outWidth;
-		int availableW = (int) (availableSize / percent);
-		int availableH = (int) (availableSize * percent);
+		int availableW = (int) (Math.sqrt(availableSize) / percent);
+		int availableH = (int) (Math.sqrt(availableSize) * percent);
 		if (availableW > 1080)
 			availableW = 1080;
 		if (availableH > 1920)
@@ -129,10 +141,10 @@ public class PhotoLoadTask extends Pool.Task
 		rect.top = (int) (-mLoadPercentRectF.top * options.outHeight);
 		rect.bottom = (int) (mLoadPercentRectF.bottom * options.outHeight);
 		float percent = rect.width() * 1.0f / rect.height();
-		int availableW = (int) (availableSize / percent);
+		int availableW = (int) (Math.sqrt(availableSize) / percent);
+		int availableH = (int) (Math.sqrt(availableSize) * percent);
 		if (availableW > 1920)
 			availableW = 1920;
-		int availableH = (int) (availableSize * percent);
 		if (availableH > 1920)
 			availableH = 1920;
 		if (availableW <= 5 || availableH <= 5)
