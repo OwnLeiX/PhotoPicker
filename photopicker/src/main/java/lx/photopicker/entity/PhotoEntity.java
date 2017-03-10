@@ -9,6 +9,7 @@ package lx.photopicker.entity;
 
 public class PhotoEntity {
     private String path = "";
+    private String oldPath = "";
     private boolean isPicked = false;
     private boolean isNeedNative = false;
 
@@ -34,5 +35,13 @@ public class PhotoEntity {
 
     public void setNeedNative(boolean needNative) {
         isNeedNative = needNative;
+    }
+
+    public String getOldPath() {
+        return oldPath;
+    }
+
+    public void setOldPath(String oldPath) {
+        this.oldPath = oldPath;
     }
 }

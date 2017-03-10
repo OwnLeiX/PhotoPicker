@@ -16,7 +16,7 @@ public class Pool
 	private static final int POOL_SIZE = Runtime.getRuntime().availableProcessors();// 线程池大小
 	private volatile static int count = 0;// 工作线程数
 	private static ThreadPoolExecutor THREAD_POOL = (ThreadPoolExecutor) Executors.newFixedThreadPool(POOL_SIZE);// 线程池
-	private static LinkedList<Task> TASK_QUEUE = new LinkedList<>();// 等待队列
+	private static LinkedList<PoolTask> TASK_QUEUE = new LinkedList<>();// 等待队列
 
 	public static ThreadPoolExecutor $(){
 		return THREAD_POOL;
@@ -24,21 +24,21 @@ public class Pool
 
 	/**
 	 * 执行任务
-	 * @param task
+	 * @param poolTask
 	 * @return 是否执行，否：放入等待队列
 	 */
-	public static boolean execute(Task task)
+	public static boolean execute(PoolTask poolTask)
 	{
 		boolean isExecute = false;
 		if (count < POOL_SIZE)
 		{
 			count++;
 			isExecute = true;
-			THREAD_POOL.execute(task);
+			THREAD_POOL.execute(poolTask);
 		} else
 		{
 			// 排队
-			TASK_QUEUE.addLast(task);
+			TASK_QUEUE.addLast(poolTask);
 		}
 		return isExecute;
 	}
@@ -52,8 +52,8 @@ public class Pool
 	{
 		boolean isCancel = false;
 
-		Task target = null;
-		for (Task item : TASK_QUEUE)
+		PoolTask target = null;
+		for (PoolTask item : TASK_QUEUE)
 		{
 			if (item.id == id)
 			{
@@ -78,7 +78,7 @@ public class Pool
 	/**
 	 * 线程池中执行的任务
 	 */
-	public static abstract class Task implements Runnable
+	public static abstract class PoolTask implements Runnable
 	{
 		// 使用id去标识任务，当存在排队等待的任务时可以依据id进行删除操作。
 		public long id;
@@ -92,13 +92,13 @@ public class Pool
 			// 耗时工作
 			work();
 			// 完成任务后通知主线程，线程池有一个空余线程,并试图从等待队列中获取下载任务
-			mHandler.post(new Runnable()
+			getHandler().post(new Runnable()
 			{
 				@Override
 				public void run()
 				{
 					count--;
-					Task first = TASK_QUEUE.pollFirst();
+					PoolTask first = TASK_QUEUE.pollFirst();
 					if (first != null)
 					{
 						execute(first);

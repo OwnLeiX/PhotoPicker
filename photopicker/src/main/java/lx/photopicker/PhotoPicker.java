@@ -3,8 +3,8 @@ package lx.photopicker;
 import android.app.Activity;
 import android.content.Intent;
 
-import lx.photopicker.activity.FolderListActivity;
-import lx.photopicker.util.PickerManager;
+import lx.photopicker.ui.activity.FolderListActivity;
+import lx.photopicker.kernel.PickerManager;
 
 /**
  * <b>模块主入口</b>

@@ -18,7 +18,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_gravity="bottom"
-            android:background="@color/gray66" />
+            android:background="@color/black66" />
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -54,7 +54,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/gray66"
+        android:background="@color/black66"
         android:gravity="center_vertical">
 
         <FrameLayout

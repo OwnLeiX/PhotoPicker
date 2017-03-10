@@ -58,7 +58,8 @@
                 android:id="@+id/part_picked_tv_view"
                 android:layout_width="50dp"
                 android:layout_height="match_parent"
-                android:background="@drawable/selector_btn_enabled"
+                android:textColor="@color/selector_complete_enabled"
+                android:textStyle="bold"
                 android:gravity="center"
                 android:text="预览" />
 
@@ -71,7 +72,8 @@
                 android:id="@+id/part_picked_tv_finish"
                 android:layout_width="50dp"
                 android:layout_height="match_parent"
-                android:background="@drawable/selector_btn_enabled"
+                android:textColor="@color/selector_complete_enabled"
+                android:textStyle="bold"
                 android:gravity="center"
                 android:text="确认" />
         </LinearLayout>
