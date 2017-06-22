@@ -13,5 +13,6 @@ import lx.photopicker.entity.PhotoEntity;
 
 public interface PickerCallback {
     void onCancel();
-    void onPicked(List<PhotoEntity> pickedPhotos);
+
+    void onPicked(List<PhotoEntity> pickedPhotos, PhotoParams photoParams);
 }

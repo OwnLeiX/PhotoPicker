@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ClipPhotoView">
+        <attr name="clipPhotoView_clipRectMarginLeft" format="dimension"/>
+        <attr name="clipPhotoView_clipRectMarginRight" format="dimension"/>
+        <attr name="clipPhotoView_clipRectMarginTop" format="dimension"/>
+        <attr name="clipPhotoView_clipRectMarginBottom" format="dimension"/>
+        <attr name="clipPhotoView_OverlapColor" format="color"/>
+        <attr name="clipPhotoView_highQualityImage" format="boolean"/>
+        <attr name="clipPhotoView_clipMode" format="boolean"/>
+    </declare-styleable>
+</resources>

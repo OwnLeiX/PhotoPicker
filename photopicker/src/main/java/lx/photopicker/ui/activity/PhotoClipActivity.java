@@ -24,12 +24,22 @@ import lx.photopicker.util.Pool;
  */
 
 public class PhotoClipActivity extends BaseActivity implements View.OnClickListener, PhotoZipCallback, BitmapClipCallback {
+
+	public static String KEY_JUST_CLIP = "justClip";
+
 	private ClipPhotoView photoClip_cpv_photo;
 	private TextView photoClip_tv_pick;//确定和取消的按钮
 	private FrameLayout photoClip_fl_back;
 	private CheckBox photoClip_cb_native;
 	private PhotoParams mPhotoParams;//本次Pick的Photo参数
 	private PhotoEntity mCurrentPhoto;//当前显示的Photo
+
+	private boolean isJustClipMode;
+
+	@Override
+	protected void onInitFeature() {
+		isJustClipMode = getIntent().getBooleanExtra(KEY_JUST_CLIP, false);
+	}
 
 	@Override
 	protected View onInitContentView()
@@ -47,7 +57,7 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
 		photoClip_cb_native = (CheckBox) findViewById(R.id.photoClip_cb_native);
 		if (mPhotoParams.isClip() && mPhotoParams.getClipSize() != null)
 		{
-			photoClip_cpv_photo.setClipMode(ClipPhotoView.MODE_CLIP);
+			photoClip_cpv_photo.setClipMode(true);
 			photoClip_cpv_photo.setClipSize(mPhotoParams.getClipSize());
 		}
 	}
@@ -57,6 +67,8 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
 	{
 		photoClip_tv_pick.setOnClickListener(this);
 		photoClip_fl_back.setOnClickListener(this);
+		findViewById(R.id.photoClip_tv_rotateCW).setOnClickListener(this);
+		findViewById(R.id.photoClip_tv_rotateCCW).setOnClickListener(this);
 	}
 
 	@Override
@@ -65,32 +77,6 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
 		mCurrentPhoto = PickerManager.$().getCurrentPhoto();
 		photoClip_cpv_photo.setExecutor(Pool.$());
 		photoClip_cpv_photo.setUrl(mCurrentPhoto.getPath());
-	}
-
-	@Override
-	public void onClick(View v)
-	{
-		if (v.getId() == R.id.photoClip_fl_back)
-		{
-			finishByCancel();
-		} else if (v.getId() == R.id.photoClip_tv_pick)
-		{
-			if (mPhotoParams.isClip())
-			{//如果是裁剪模式，裁剪图片
-				clipPhoto();
-			} else
-			{//如果不是裁剪模式，直接将图片添加到选择列表
-				setNeedNative(mCurrentPhoto);
-				PickerManager.$().addPickedPhoto(mCurrentPhoto);
-				if (mPhotoParams.isMulti())
-				{//如果是复选模式，则返回上一页
-					finishByCancel();
-				} else
-				{//如果是单选模式，则直接结束
-					finishByComplete();
-				}
-			}
-		}
 	}
 
 	/**
@@ -133,21 +119,6 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
 	}
 
 	@Override
-	public void onZipFinished(PhotoEntity photo)
-	{
-		photo.setPicked(true);
-		setNeedNative(photo);
-		PickerManager.$().addPickedPhoto(photo);
-		if (mPhotoParams.isMulti())
-		{
-			finishByCancel();
-		} else
-		{
-			finishByComplete();
-		}
-	}
-
-	@Override
 	public void onZipError(Throwable e)
 	{
 		showShortToast("啊哦，出错了");
@@ -157,7 +128,50 @@ public class PhotoClipActivity extends BaseActivity implements View.OnClickListe
 	@Override
 	public void onClipCompleted(Bitmap bitmap)
 	{
-		String path = getCacheDir().getAbsolutePath() + "/" + System.currentTimeMillis() + ".jpg";
+		String path = PickerManager.mRootDir + System.currentTimeMillis() + ".jpg";
 		Pool.execute(new PhotoZipPoolTask(bitmap, path, mPhotoParams, this));
+	}
+
+	@Override
+	public void onClick(View v) {
+		if (v.getId() == R.id.photoClip_fl_back) {
+			finishByCancel();
+		} else if (v.getId() == R.id.photoClip_tv_pick) {
+			if (mPhotoParams.isClip()) {//如果是裁剪模式，裁剪图片
+				clipPhoto();
+			} else {//如果不是裁剪模式，直接将图片添加到选择列表
+				PickerManager.$().addPickedPhoto(mCurrentPhoto);
+				if (isJustClipMode) {
+					PickerManager.$().doCallback(null);
+					finishByCancel();
+				} else {
+					if (mPhotoParams.isMulti()) {//如果是复选模式，则返回上一页
+						finishByCancel();
+					} else {//如果是单选模式，则直接结束
+						finishByComplete();
+					}
+				}
+			}
+		}else if (v.getId() == R.id.photoClip_tv_rotateCW ){
+			photoClip_cpv_photo.rotateCW();
+		}else if (v.getId() == R.id.photoClip_tv_rotateCCW ){
+			photoClip_cpv_photo.rotateCCW();
+		}
+	}
+
+	@Override
+	public void onZipFinished(PhotoEntity photo) {
+		photo.setPicked(true);
+		PickerManager.$().addPickedPhoto(photo);
+		if (isJustClipMode) {
+			PickerManager.$().doCallback(null);
+			finishByCancel();
+		} else {
+			if (mPhotoParams.isMulti()) {
+				finishByCancel();
+			} else {
+				finishByComplete();
+			}
+		}
 	}
 }

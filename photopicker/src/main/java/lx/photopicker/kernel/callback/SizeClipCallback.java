@@ -2,6 +2,7 @@ package lx.photopicker.kernel.callback;
 
 import java.util.List;
 
+import lx.photopicker.PhotoParams;
 import lx.photopicker.entity.PhotoEntity;
 
 /**
@@ -12,5 +13,5 @@ import lx.photopicker.entity.PhotoEntity;
  */
 
 public interface SizeClipCallback {
-    void onSizeClipFinished(List<PhotoEntity> photos);
+    void onSizeClipFinished(List<PhotoEntity> photos, PhotoParams params);
 }

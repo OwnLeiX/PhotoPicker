@@ -27,7 +27,7 @@
             android:gravity="left|center_vertical"
             android:textColor="@color/black"
             android:textSize="@dimen/font_normal"
-            tools:text="系统相册" />
+            tools:text="系统相册sdasdasdajsdnalsjdlaksjdlkajsdlkasjdklasjdklasjdlasdlkjasdlkjal" />
 
         <TextView
             android:id="@+id/folderList_item_tv_photosCount"

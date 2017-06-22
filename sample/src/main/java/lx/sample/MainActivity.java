@@ -88,7 +88,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     @Override
-    public void onPicked(List<PhotoEntity> pickedPhotos) {
+    public void onPicked(List<PhotoEntity> pickedPhotos,PhotoParams params) {
         mAdapter.update(pickedPhotos);
     }
 }

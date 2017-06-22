@@ -11,6 +11,9 @@ public class PhotoParams {
     public static final int FLAG_CLIP = 1;
     public static final int FLAG_MULTI = 1 << 1;
 
+    public static final int NONE_SIZE = -1;
+    public static final int NONE_PIXEL = -1;
+
     private int[] clipSize;
     private int maxCount = 1;
     private int maxPixel;
@@ -67,9 +70,9 @@ public class PhotoParams {
         private int flags = 0;
         private int[] size;
         private int maxCount = 1;
-        private int maxPixel = 2000;
-        private long maxSize = 200 * 1024;
-        private long nativeMaxSize = 3 * 1024 * 1024;
+        private int maxPixel = NONE_PIXEL;
+        private long maxSize = NONE_SIZE;
+        private long nativeMaxSize = NONE_SIZE;
 
         public Builder addFlags(int flags){
             this.flags |= flags;

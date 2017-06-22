@@ -5,8 +5,8 @@ android {
     buildToolsVersion "25.0.2"
     defaultConfig {
         applicationId "lx.sample"
-        minSdkVersion 10
-        targetSdkVersion 24
+        minSdkVersion 12
+        targetSdkVersion 14
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
