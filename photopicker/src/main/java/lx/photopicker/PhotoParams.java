@@ -76,8 +76,8 @@ public class PhotoParams {
         private int[] size;
         private int maxCount = 1;
         private int maxPixel = Integer.MAX_VALUE;
-        private long maxSize = Integer.MAX_VALUE;
-        private long nativeMaxSize = Integer.MAX_VALUE;
+        private long maxSize = Long.MAX_VALUE;
+        private long nativeMaxSize = Long.MAX_VALUE;
 
         public Builder setClipSize(int[] size) {
             this.size = size;
@@ -110,6 +110,8 @@ public class PhotoParams {
         public Builder setNativeMaxSize(long nativeMaxSize) {
             this.nativeMaxSize = nativeMaxSize;
             flags |= FLAG_NATIVE_PHOTO;
+            if (maxSize > nativeMaxSize)
+                maxSize = nativeMaxSize;
             return this;
         }
 
