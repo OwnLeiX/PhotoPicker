@@ -8,30 +8,41 @@ package lx.photopicker;
  */
 
 public class PhotoParams {
-    public static final int FLAG_CLIP = 1;
-    public static final int FLAG_MULTI = 1 << 1;
+    private static final int FLAG_CLIP = 1;
+    private static final int FLAG_MULTI = 1 << 1;
+    private static final int FLAG_LIMIT_SIZE = 1 << 2;
+    private static final int FLAG_LIMIT_PIXEL = 1 << 3;
+    private static final int FLAG_NATIVE_PHOTO = 1 << 4;
 
-    public static final int NONE_SIZE = -1;
-    public static final int NONE_PIXEL = -1;
-
+    private int mFlags;
     private int[] clipSize;
     private int maxCount = 1;
     private int maxPixel;
     private long maxSize;
     private long nativeMaxSize;
-    private boolean isClip = false;
-    private boolean isMulti = false;
 
     public int[] getClipSize() {
         return clipSize;
     }
 
     public boolean isClip() {
-        return isClip;
+        return (mFlags & FLAG_CLIP) > 0;
     }
 
     public boolean isMulti() {
-        return isMulti;
+        return (mFlags & FLAG_MULTI) > 0;
+    }
+
+    public boolean isLimitSize() {
+        return (mFlags & FLAG_LIMIT_SIZE) > 0;
+    }
+
+    public boolean isLimitPixel() {
+        return (mFlags & FLAG_LIMIT_PIXEL) > 0;
+    }
+
+    public boolean isNativePhoto() {
+        return (mFlags & FLAG_NATIVE_PHOTO) > 0;
     }
 
     public int getMaxCount() {
@@ -50,61 +61,59 @@ public class PhotoParams {
         return nativeMaxSize;
     }
 
-    private PhotoParams(Builder builder){
-        if ((builder.flags & FLAG_CLIP) > 0){
-            this.isClip = true;
-            this.clipSize = builder.size;
-        }
-        if ((builder.flags & FLAG_MULTI) > 0) {
-            this.isMulti = true;
-        }
+    private PhotoParams(Builder builder) {
+        this.mFlags = builder.flags;
         this.maxCount = builder.maxCount;
         this.maxPixel = builder.maxPixel;
         this.maxSize = builder.maxSize;
         this.nativeMaxSize = builder.nativeMaxSize;
+        this.clipSize = builder.size;
     }
 
 
-
-    public static class Builder{
+    public static class Builder {
         private int flags = 0;
         private int[] size;
         private int maxCount = 1;
-        private int maxPixel = NONE_PIXEL;
-        private long maxSize = NONE_SIZE;
-        private long nativeMaxSize = NONE_SIZE;
-
-        public Builder addFlags(int flags){
-            this.flags |= flags;
-            return this;
-        }
+        private int maxPixel = Integer.MAX_VALUE;
+        private long maxSize = Integer.MAX_VALUE;
+        private long nativeMaxSize = Integer.MAX_VALUE;
 
         public Builder setClipSize(int[] size) {
             this.size = size;
+            flags |= FLAG_CLIP;
             return this;
         }
 
         public Builder setMaxCount(int maxCount) {
             this.maxCount = maxCount;
+            if (maxCount > 1) {
+                flags |= FLAG_MULTI;
+            } else {
+                flags &= ~FLAG_MULTI;
+            }
             return this;
         }
 
         public Builder setMaxPixel(int maxPixel) {
             this.maxPixel = maxPixel;
+            flags |= FLAG_LIMIT_PIXEL;
             return this;
         }
 
         public Builder setMaxSize(long maxSize) {
             this.maxSize = maxSize;
+            flags |= FLAG_LIMIT_SIZE;
             return this;
         }
 
         public Builder setNativeMaxSize(long nativeMaxSize) {
             this.nativeMaxSize = nativeMaxSize;
+            flags |= FLAG_NATIVE_PHOTO;
             return this;
         }
 
-        public PhotoParams create(){
+        public PhotoParams create() {
             return new PhotoParams(this);
         }
     }

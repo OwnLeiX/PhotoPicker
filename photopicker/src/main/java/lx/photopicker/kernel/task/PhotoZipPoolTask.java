@@ -22,23 +22,25 @@ public class PhotoZipPoolTask extends Pool.PoolTask {
     private PhotoZipCallback mCallback;
     private String mPath;
     private PhotoParams mParams;
+    private boolean isNative;
 
-    public PhotoZipPoolTask(Bitmap bitmap, String path, PhotoParams params, PhotoZipCallback callback) {
+    public PhotoZipPoolTask(Bitmap bitmap, String path, PhotoParams params, boolean isNeedNative, PhotoZipCallback callback) {
         this.mBitmap = bitmap;
         this.mCallback = callback;
         this.mPath = path;
         this.mParams = params;
+        this.isNative = isNeedNative && params.isNativePhoto();
     }
 
     @Override
     protected void work() {
         try {
-            long maxSize = mParams.getMaxSize();
+            long maxSize = isNative ? mParams.getNativeMaxSize() : mParams.getMaxSize();
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             int options = 100;
             mBitmap.compress(Bitmap.CompressFormat.JPEG, options, baos);
             byte[] bytes = baos.toByteArray();
-            while (maxSize != PhotoParams.NONE_SIZE && bytes.length >= maxSize && options > 0) {
+            while (mParams.isLimitSize() && bytes.length >= maxSize && options > 0) {
                 baos.reset();
                 options -= 10;
                 if (options < 0)
@@ -55,6 +57,7 @@ public class PhotoZipPoolTask extends Pool.PoolTask {
             fos.close();
             baos.close();
             final PhotoEntity photoEntity = new PhotoEntity(mPath);
+            photoEntity.setNative(isNative);
             if (mCallback != null) {
                 getHandler().post(new Runnable() {
                     @Override

@@ -40,9 +40,9 @@ public class SizeClipPoolTask extends Pool.PoolTask {
     @Override
     protected void work() {
         for (PhotoEntity photo : mPhotos) {
-            PhotoEntity photoEntity = clipToSize(photo);
-            if (photoEntity != null)
-                mClipPhotos.add(photoEntity);
+            PhotoEntity resizedPhoto = clipToSize(photo);
+            if (resizedPhoto != null)
+                mClipPhotos.add(resizedPhoto);
         }
         if (mCallback != null) {
             getHandler().post(new Runnable() {
@@ -55,8 +55,8 @@ public class SizeClipPoolTask extends Pool.PoolTask {
     }
 
     private PhotoEntity clipToSize(PhotoEntity photo) {
-        PhotoEntity photoEntity = photo;
-        long maxSize = photoEntity.isNeedNative() ? mParams.getNativeMaxSize() : mParams.getMaxSize();
+        PhotoEntity returnValue = photo;
+        long maxSize = returnValue.isNative() ? mParams.getNativeMaxSize() : mParams.getMaxSize();
         try {
             //通过设置读取压缩比，来控制图片的像素
             BitmapFactory.Options options = new BitmapFactory.Options();
@@ -77,7 +77,7 @@ public class SizeClipPoolTask extends Pool.PoolTask {
             int availableW = (int) (Math.sqrt(availableSize) / percent);
             int availableH = (int) (Math.sqrt(availableSize) * percent);
             int maxPixel = mParams.getMaxPixel();
-            if (maxPixel != PhotoParams.NONE_PIXEL) { //有像素限制要求
+            if (mParams.isLimitPixel()) { //有像素限制要求
                 if (availableW > maxPixel)//能读出来的图片宽度比最大像素限制还大
                     availableW = maxPixel;
                 if (availableH > maxPixel)//能读出来的图片宽度比最大像素限制还大
@@ -86,8 +86,8 @@ public class SizeClipPoolTask extends Pool.PoolTask {
             options.inSampleSize = calculateInSampleSize(options, availableW, availableH);
             options.inJustDecodeBounds = false;
             File file = new File(photo.getPath());
-            if ((maxSize != PhotoParams.NONE_SIZE && file.length() > maxSize) //有文件尺寸限制 && 文件尺寸大于要求
-                    || (maxPixel != PhotoParams.NONE_PIXEL && (options.outWidth > maxPixel || options.outHeight > maxPixel)) //文件原像素 大于 最大像素要求
+            if ((mParams.isLimitSize() && file.length() > maxSize) //有文件尺寸限制 && 文件尺寸大于要求
+                    || (mParams.isLimitPixel() && (options.outWidth > maxPixel || options.outHeight > maxPixel)) //文件原像素 大于 最大像素要求
                     ) {
                 Bitmap bitmap = BitmapFactory.decodeFile(photo.getPath(), options);
                 //通过设置图片质量，来控制图片文件的大小
@@ -112,17 +112,16 @@ public class SizeClipPoolTask extends Pool.PoolTask {
                 fos.flush();
                 fos.close();
                 baos.close();
-                photoEntity = new PhotoEntity(path);
-                photoEntity.setNeedNative(photo.isNeedNative());
+                returnValue = new PhotoEntity(path);
+                returnValue.setNative(photo.isNative());
             }
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
-            return photoEntity;
+            return returnValue;
         }
-
     }
 
     private int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {

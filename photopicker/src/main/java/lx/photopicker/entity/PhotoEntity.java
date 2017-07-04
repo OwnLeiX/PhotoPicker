@@ -11,7 +11,7 @@ public class PhotoEntity {
     private String path = "";
     private String oldPath = "";
     private boolean isPicked = false;
-    private boolean isNeedNative = false;
+    private boolean isNative = false;
 
     public PhotoEntity(String path) {
         this.path = path;
@@ -29,12 +29,12 @@ public class PhotoEntity {
         isPicked = picked;
     }
 
-    public boolean isNeedNative() {
-        return isNeedNative;
+    public boolean isNative() {
+        return isNative;
     }
 
-    public void setNeedNative(boolean needNative) {
-        isNeedNative = needNative;
+    public void setNative(boolean is) {
+        isNative = is;
     }
 
     public String getOldPath() {

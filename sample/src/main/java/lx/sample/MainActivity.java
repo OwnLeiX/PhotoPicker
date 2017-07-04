@@ -54,7 +54,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btn2:
                 photoParams = new PhotoParams.Builder()
-                        .addFlags(PhotoParams.FLAG_MULTI)
                         .setMaxSize(200 * 1024)
                         .setMaxPixel(100)
                         .setMaxCount(9)
@@ -63,7 +62,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btn3:
                 photoParams = new PhotoParams.Builder()
-                        .addFlags(PhotoParams.FLAG_CLIP)
                         .setClipSize(new int[]{400,200})
                         .setMaxSize(200 * 1024)
                         .create();
@@ -71,9 +69,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 break;
             case R.id.btn4:
                 photoParams = new PhotoParams.Builder()
-                        .addFlags(PhotoParams.FLAG_CLIP)
                         .setClipSize(new int[]{200,400})
-                        .addFlags(PhotoParams.FLAG_MULTI)
                         .setMaxCount(9)
                         .setMaxSize(200 * 1024)
                         .create();
