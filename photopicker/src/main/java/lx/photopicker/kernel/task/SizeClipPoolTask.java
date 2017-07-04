@@ -48,7 +48,7 @@ public class SizeClipPoolTask extends Pool.PoolTask {
             getHandler().post(new Runnable() {
                 @Override
                 public void run() {
-                    mCallback.onSizeClipFinished(mClipPhotos,mParams);
+                    mCallback.onSizeClipFinished(mClipPhotos, mParams);
                 }
             });
         }
@@ -77,7 +77,7 @@ public class SizeClipPoolTask extends Pool.PoolTask {
             int availableW = (int) (Math.sqrt(availableSize) / percent);
             int availableH = (int) (Math.sqrt(availableSize) * percent);
             int maxPixel = mParams.getMaxPixel();
-            if (maxPixel != -1) { //有像素限制要求
+            if (maxPixel != PhotoParams.NONE_PIXEL) { //有像素限制要求
                 if (availableW > maxPixel)//能读出来的图片宽度比最大像素限制还大
                     availableW = maxPixel;
                 if (availableH > maxPixel)//能读出来的图片宽度比最大像素限制还大
