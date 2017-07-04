@@ -104,6 +104,8 @@ public class PhotoParams {
         public Builder setMaxSize(long maxSize) {
             this.maxSize = maxSize;
             flags |= FLAG_LIMIT_SIZE;
+            if (maxSize > nativeMaxSize)
+                maxSize = nativeMaxSize;
             return this;
         }
 
