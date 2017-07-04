@@ -7,37 +7,44 @@
 ####
 * 0 获取一张图片
 
-<pre><code>PhotoPicker.pickPhoto((Activity)this,null,(PickerCallback)this);
+<pre><code>PhotoPicker.pickPhoto((Activity)this,null,(PickerCallback)callback);
 </code></pre>
 
 * 1 获取9张图片,指定长边最大宽度不超过100px，文件尺寸不超过200KB
 <pre><code>PhotoParams photoParams = new PhotoParams.Builder()
-                  .addFlags(PhotoParams.FLAG_MULTI)
                   .setMaxCount(9)
                   .setMaxSize(200 * 1024)
                   .setMaxPixel(100)
                   .create();
-PhotoPicker.pickPhoto((Activity)this,photoParams,(PickerCallback)this);
+PhotoPicker.pickPhoto((Context)context,(PhotoParams)photoParams,(PickerCallback)callback);
 </code></pre>
 
 * 2 获取一张400x300像素的图片，文件尺寸不超过200KB
 <pre><code>PhotoParams photoParams = new PhotoParams.Builder()
-.addFlags(PhotoParams.FLAG_CLIP)
 .setClipSize(new int[]{400,300})
 .setMaxSize(200 * 1024)
 .create();
-PhotoPicker.pickPhoto((Activity)this,photoParams,(PickerCallback)this);
+PhotoPicker.pickPhoto((Context)context,(PhotoParams)photoParams,(PickerCallback)callback);
 </code></pre>
                 
 * 3 获取9张300x400像素图片，文件尺寸不超过200KB
 <pre><code>PhotoParams photoParams = new PhotoParams.Builder()
-                  .addFlags(PhotoParams.FLAG_CLIP)
                   .setClipSize(new int[]{300,400})
                   .addFlags(PhotoParams.FLAG_MULTI)
                   .setMaxSize(200 * 1024)
                   .setMaxCount(9)
                   .create();
-PhotoPicker.pickPhoto((Activity)this,photoParams,(PickerCallback)this);
+PhotoPicker.pickPhoto((Context)context,(PhotoParams)photoParams,(PickerCallback)callback);
+</code></pre>
+
+* 4 我有图片，只要你裁剪
+<pre><code>PhotoParams photoParams = new PhotoParams.Builder()
+                  .setClipSize(new int[]{300,400})
+                  .addFlags(PhotoParams.FLAG_MULTI)
+                  .setMaxSize(200 * 1024)
+                  .setMaxCount(9)
+                  .create();
+PhotoPicker.clipPhoto((Context)context, (String)path, (PhotoParams)photoParams, (PickerCallback)callback);
 </code></pre>
 
 > 回调
