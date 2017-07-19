@@ -29,7 +29,7 @@ import lx.photopicker.util.Pool;
 public class PickerManager implements ScanCallback, SizeClipCallback {
     private static PickerManager mInstance;//单一实例
 
-    public static String mRootDir = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + ".michongH5" + File.separator + "temp" + File.separator;
+    public static String mRootDir = Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "photos" + File.separator;
 
     private ScanPoolTask mTask;//扫描任务
     private ScanCallback mScanCallback;//扫描回调
@@ -255,9 +255,9 @@ public class PickerManager implements ScanCallback, SizeClipCallback {
      * 最后的裁剪图片尺寸任务的回调
      */
     @Override
-    public void onSizeClipFinished(List<PhotoEntity> photos,PhotoParams params) {
+    public void onSizeClipFinished(List<PhotoEntity> photos, PhotoParams params) {
         if (mPickerCallback != null)
-            mPickerCallback.onPicked(photos,params);
+            mPickerCallback.onPicked(photos, params);
         if (mDoCallbackCallback != null)
             mDoCallbackCallback.onCompleted();
         PickerManager.destroy();//销毁自己，避免内存泄漏

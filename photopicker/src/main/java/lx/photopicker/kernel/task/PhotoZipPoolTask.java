@@ -3,6 +3,7 @@ package lx.photopicker.kernel.task;
 import android.graphics.Bitmap;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 
 import lx.photopicker.PhotoParams;
@@ -51,7 +52,11 @@ public class PhotoZipPoolTask extends Pool.PoolTask {
             if (!mBitmap.isRecycled())
                 mBitmap.recycle();
             mBitmap = null;
-            FileOutputStream fos = new FileOutputStream(mPath);
+            File target = new File(mPath);
+            File parentFile = target.getParentFile();
+            if (!parentFile.exists())
+                parentFile.mkdirs();
+            FileOutputStream fos = new FileOutputStream(target);
             fos.write(bytes);
             fos.flush();
             fos.close();
